@@ -13,9 +13,9 @@ Right now, supports benchmarking system calls.
 EPILOG = """
 """
 
-class ParserTimeType():
+class ParserTimeDeltaType():
     """
-    Arguments of type time w.r.t. now.
+    Arguments of type timedelta.
     Works like the arguments to timeout(1).
     """
 
@@ -29,17 +29,16 @@ class ParserTimeType():
 
     def construct_time(self, unit, value):
         value = int(value)
-        now = datetime.datetime.now()
         if unit == 'seconds':
-            return now + datetime.timedelta(seconds=value)
+            return datetime.timedelta(seconds=value)
         if unit == 'minutes':
-            return now + datetime.timedelta(minutes=value)
+            return datetime.timedelta(minutes=value)
         if unit == 'hours':
-            return now + datetime.timedelta(hours=value)
+            return datetime.timedelta(hours=value)
         if unit == 'days':
-            return now + datetime.timedelta(days=value)
+            return datetime.timedelta(days=value)
         if unit == 'weeks':
-            return now + datetime.timedelta(weeks=value)
+            return datetime.timedelta(weeks=value)
         raise argparse.ArgumentTypeError(f'Unable to construct {unit} with {value}.')
 
     def __call__(self, value):
@@ -49,14 +48,40 @@ class ParserTimeType():
                 return self.construct_time(k, match[1])
         raise argparse.ArgumentTypeError(f'Invalid specification for time "{value}".')
 
+class ParserNewFileType():
+    """
+    Arguments of type new file.
+    Intelligently prevents user from specifying and invalid path.
+    """
+
+    def __call__(self, path):
+        d, f = os.path.split(path)
+        try:
+            d = os.path.realpath(d)
+        except:
+            pass
+        if d and not os.path.exists(d):
+            raise argparse.ArgumentTypeError(f'Parent directory {d} does not exist.')
+        if d and not os.path.isdir(d):
+            raise argparse.ArgumentTypeError(f'{d} is a file.')
+        if os.path.isdir(f):
+            raise argparse.ArgumentTypeError(f'{f} is a directory.')
+        return os.path.join(d, f)
+        #raise argparse.ArgumentTypeError(f'Invalid specification for time "{path}".')
+
 def parse_args(args=sys.argv[1:]):
+    """
+    Argument parsing logic.
+    """
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('duration', type=ParserTimeType(),
-            help="Duration to run benchmark. Supports values like: #s #m #h #d #w")
-    parser.add_argument('-c', '--checkpoint', type=ParserTimeType(), default='30m',
-            help="Interval to checkpoint results. Defaults to 30m. Supports values like: #s #m #h #d #w")
+    parser.add_argument('duration', type=ParserTimeDeltaType(),
+            help="Duration to run benchmark. Supports values like: #[s] #m #h #d #w")
+    parser.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default='30m',
+            help="Interval to checkpoint results. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
+    parser.add_argument('outfile', type=ParserNewFileType(),
+            help="Location to save benchmark data.")
 
     args = parser.parse_args()
 
@@ -64,8 +89,15 @@ def parse_args(args=sys.argv[1:]):
     if os.geteuid() != 0:
         parser.error("This script must be run with root privileges.")
 
+    # Check for sudo_uid
+    if not os.getenv('SUDO_UID'):
+        print('Warning: You should probably run this script with sudo, not via a root shell.', file=sys.stderr)
+
     return args
 
 
 def syscall_name(num):
+    """
+    Return uppercase system call name.
+    """
     return syscall.syscall_name(num).upper()
