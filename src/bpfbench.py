@@ -107,6 +107,7 @@ class BPFBench:
             results_str = ''
             # Add timestamp
             curr_time = datetime.datetime.now()
+            # String += is O(n^2) in Python, don't try this at home, kids
             results_str += f'Experiment start: {self.start_time}\n'
             results_str += f'Current time:     {curr_time}\n'
             results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
