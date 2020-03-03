@@ -11,6 +11,6 @@ Benchmarking done right in BPF.
 ## Installing
 
 - Clone this repo
-- Run `make install`
+- Run `sudo make install`
 - ???
 - Profit
