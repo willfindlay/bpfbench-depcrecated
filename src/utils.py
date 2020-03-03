@@ -51,23 +51,25 @@ class ParserTimeDeltaType():
 class ParserNewFileType():
     """
     Arguments of type new file.
-    Intelligently prevents user from specifying and invalid path.
+    Intelligently prevents user from specifying an invalid path.
     """
 
     def __call__(self, path):
         d, f = os.path.split(path)
+        # Make things absolute
         try:
             d = os.path.realpath(d)
         except:
-            pass
-        if d and not os.path.exists(d):
+            # Parent dir doesn't exist
             raise argparse.ArgumentTypeError(f'Parent directory {d} does not exist.')
+        # Check if parent dir is a dir
         if d and not os.path.isdir(d):
             raise argparse.ArgumentTypeError(f'{d} is a file.')
+        # Make sure f is not a dir
         if os.path.isdir(f):
             raise argparse.ArgumentTypeError(f'{f} is a directory.')
+        # Join f with new d
         return os.path.join(d, f)
-        #raise argparse.ArgumentTypeError(f'Invalid specification for time "{path}".')
 
 def parse_args(args=sys.argv[1:]):
     """
@@ -82,8 +84,14 @@ def parse_args(args=sys.argv[1:]):
             help="Interval to checkpoint results. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
     parser.add_argument('outfile', type=ParserNewFileType(),
             help="Location to save benchmark data.")
+    parser.add_argument('--overwrite', action='store_true',
+            help='Allow overwriting an existing outfile.')
 
     args = parser.parse_args()
+
+    # Check for overwrite
+    if not args.overwrite and os.path.exists(args.outfile):
+        parser.error(f"Cannot overwrite {args.outfile} without --overwrite.")
 
     # Check for root
     if os.geteuid() != 0:
