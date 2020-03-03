@@ -86,6 +86,10 @@ def parse_args(args=sys.argv[1:]):
             help="Location to save benchmark data.")
     parser.add_argument('--overwrite', action='store_true',
             help='Allow overwriting an existing outfile.')
+    parser.add_argument('--sort', type=str, choices=['sys', 'count', 'overhead'], default='overhead',
+            help='Sort by system call number, count, or overhead. Defaults to overhead.')
+    parser.add_argument('--average', action='store_true',
+            help='Average overhead per syscall count instead printing total overhead.')
 
     args = parser.parse_args()
 
@@ -108,4 +112,4 @@ def syscall_name(num):
     """
     Return uppercase system call name.
     """
-    return syscall.syscall_name(num).upper()
+    return syscall.syscall_name(num).upper().decode('utf-8')

@@ -5,7 +5,7 @@ import datetime
 import threading
 import signal
 
-from bcc import BPF
+from bcc import BPF, syscall
 
 from src import defs
 from src.utils import syscall_name, parse_args
@@ -20,6 +20,7 @@ class BPFBench:
     def __init__(self, args):
         self.args = args
         self.bpf = None
+        self.start_time = None
         self.should_exit = 0
         self.timer_thread = threading.Thread(target=self.timer)
         self.timer_thread.setDaemon(1)
@@ -33,6 +34,7 @@ class BPFBench:
         flags = []
         # Add BPF_PATH for header includes
         flags.append(f'-I{defs.BPF_PATH}')
+        flags.append(f'-DNUM_SYSCALLS={len(syscall.syscalls)}')
 
         # Load BPF program
         self.bpf = BPF(src_file=f'{defs.BPF_PATH}/bpf_program.c', cflags=flags)
@@ -53,18 +55,49 @@ class BPFBench:
                 self.should_exit = 1
             time.sleep(1)
 
+    def get_results(self):
+        """
+        Get benchmark results.
+        """
+        results = {}
+        for key, percpu_syscall in self.bpf['syscalls'].iteritems():
+            count = 0
+            overhead = 0.0
+            for syscall in percpu_syscall:
+                count += syscall.count
+                overhead += syscall.overhead
+            if not count:
+                continue
+            if self.args.average:
+                overhead = overhead / (count if count else 1)
+            results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead}
+        return results
+
     def save_results(self):
         """
         Save benchmark results.
         """
+        results = self.get_results()
         # Drop privileges
         try:
             os.setegid(int(os.getenv('SUDO_GID')))
             os.seteuid(int(os.getenv('SUDO_UID')))
         except TypeError:
-            print("Error: Unable to drop privileges before saving!", file=sys.stderr)
+            print("Warning: Unable to drop privileges before saving!", file=sys.stderr)
         with open(self.args.outfile, 'w') as f:
-            f.write('test')
+            results_str = ''
+            # Add timestamp
+            curr_time = datetime.datetime.now()
+            results_str += f'Experiment start: {self.start_time}\n'
+            results_str += f'Current time:     {curr_time}\n'
+            results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
+            # Add header
+            results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"AVG. OVERHEAD" if self.args.average else "OVERHEAD":>16s}\n'
+            # Add results
+            for k, v in sorted(results.items(), key=lambda v: v[1]['sysnum'] if self.args.sort == 'sys' else
+                    v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
+                results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] / 1e3:>16.3f}\n'
+            f.write(results_str + '\n')
         # Get privileges back
         os.seteuid(0)
         os.setegid(0)
@@ -75,6 +108,8 @@ class BPFBench:
         """
         # Load BPF program
         self.load_bpf()
+
+        self.start_time = datetime.datetime.now()
 
         # Start the timer
         self.timer_thread.start()
