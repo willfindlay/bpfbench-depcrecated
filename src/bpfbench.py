@@ -1,5 +1,6 @@
 import os, sys
 import atexit
+import datetime
 
 from bcc import BPF
 
@@ -33,6 +34,9 @@ class BPFBench:
         self.load_bpf()
 
 def main():
+    """
+    Parse arguments and run the benchmark.
+    """
     args = parse_args()
     bpf_bench = BPFBench(args)
     bpf_bench.bench()
