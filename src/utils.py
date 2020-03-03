@@ -112,4 +112,4 @@ def syscall_name(num):
     """
     Return uppercase system call name.
     """
-    return syscall.syscall_name(num).upper().decode('utf-8')
+    return syscall.syscall_name(num).decode('utf-8')

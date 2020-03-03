@@ -70,7 +70,7 @@ class BPFBench:
                 continue
             if self.args.average:
                 overhead = overhead / (count if count else 1)
-            results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead}
+            results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead / 1e3}
         return results
 
     def save_results(self):
@@ -92,11 +92,11 @@ class BPFBench:
             results_str += f'Current time:     {curr_time}\n'
             results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
             # Add header
-            results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"AVG. OVERHEAD" if self.args.average else "OVERHEAD":>16s}\n'
+            results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"AVG. OVERHEAD(us)" if self.args.average else "OVERHEAD(us)":>22s}\n'
             # Add results
             for k, v in sorted(results.items(), key=lambda v: v[1]['sysnum'] if self.args.sort == 'sys' else
                     v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
-                results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] / 1e3:>16.3f}\n'
+                results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}\n'
             f.write(results_str + '\n')
         # Get privileges back
         os.seteuid(0)
