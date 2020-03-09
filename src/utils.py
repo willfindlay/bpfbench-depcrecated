@@ -123,6 +123,7 @@ def parse_args(sysargs=sys.argv[1:]):
             vars(args)['runargs'] = sysargs[index_of_run + 1:]
         except ValueError:
             args = parser.parse_args(sysargs)
+            vars(args)['runargs'] = []
 
     # Check for overwrite
     if not args.overwrite and os.path.exists(args.outfile):
