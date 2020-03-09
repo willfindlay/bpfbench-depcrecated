@@ -36,10 +36,17 @@ BPF_PERCPU_ARRAY(syscalls, struct data_t, NUM_SYSCALLS);
 
 TRACEPOINT_PROBE(raw_syscalls, sys_enter)
 {
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+
+    #ifdef TRACE_PID
+    if (pid_tgid >> 32 != TRACE_PID)
+        return 0;
+    #endif
+
     int zero = 0;
     struct intermediate_t start = {};
 
-    start.pid_tgid = bpf_get_current_pid_tgid();
+    start.pid_tgid = pid_tgid;
     start.start_time = bpf_ktime_get_ns();
 
     intermediate.update(&zero, &start);
@@ -49,9 +56,15 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
 
 TRACEPOINT_PROBE(raw_syscalls, sys_exit)
 {
+    u64 pid_tgid = bpf_get_current_pid_tgid();
+
+    #ifdef TRACE_PID
+    if (pid_tgid >> 32 != TRACE_PID)
+        return 0;
+    #endif
+
     int zero = 0;
     int syscall = args->id;
-    u64 pid_tgid = bpf_get_current_pid_tgid();
 
     /* Discard restarted syscalls due to system suspend */
     if (args->id == __NR_restart_syscall)

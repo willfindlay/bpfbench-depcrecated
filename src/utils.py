@@ -21,6 +21,7 @@ import os, sys
 import argparse
 import re
 import datetime
+import subprocess
 
 from bcc import syscall
 
@@ -90,7 +91,7 @@ class ParserNewFileType():
         # Join f with new d
         return os.path.join(d, f)
 
-def parse_args(args=sys.argv[1:]):
+def parse_args(sysargs=sys.argv[1:]):
     """
     Argument parsing logic.
     """
@@ -109,8 +110,19 @@ def parse_args(args=sys.argv[1:]):
             help='Sort by system call number, count, or overhead. Defaults to overhead.')
     parser.add_argument('--average', action='store_true',
             help='Average overhead per syscall count instead printing total overhead.')
+    parser.add_argument('-r', '--run', metavar='prog', type=str,
+            help='Run program <prog> instead of benchmarking entire system. Provides microbenchmark functionality.')
 
-    args = parser.parse_args()
+    # Hack to allow arguments to be passed to the analyzed program
+    try:
+        index_of_run = sysargs.index('--run')
+    except ValueError:
+        try:
+            index_of_run = sysargs.index('-r')
+            args = parser.parse_args(sysargs[:index_of_run + 2])
+            vars(args)['runargs'] = sysargs[index_of_run + 1:]
+        except ValueError:
+            args = parser.parse_args(sysargs)
 
     # Check for overwrite
     if not args.overwrite and os.path.exists(args.outfile):
@@ -126,9 +138,54 @@ def parse_args(args=sys.argv[1:]):
 
     return args
 
-
 def syscall_name(num):
     """
     Return uppercase system call name.
     """
     return syscall.syscall_name(num).decode('utf-8')
+
+def drop_privileges(function):
+    """
+    Decorator to drop root
+    """
+    def inner(*args, **kwargs):
+        # Get proper UID
+        try:
+            sudo_uid = int(os.environ['SUDO_UID'])
+        except (KeyError, ValueError):
+            print("Could not get UID for sudoer", file=sys.stderr)
+            return
+        # Get proper GID
+        try:
+            sudo_gid = int(os.environ['SUDO_GID'])
+        except (KeyError, ValueError) as e:
+            print("Could not get GID for sudoer", file=sys.stderr)
+            return
+        # Drop root
+        os.setresgid(sudo_gid, sudo_gid, -1)
+        os.setresuid(sudo_uid, sudo_uid, -1)
+        # Execute function
+        ret = function(*args, **kwargs)
+        # Get root back
+        os.setresgid(0, 0, -1)
+        os.setresuid(0, 0, -1)
+        return ret
+    return inner
+
+def which(binary):
+    """
+    Locate a binary on the system, use relative paths as a fallback.
+    """
+    try:
+        w = subprocess.Popen(["which", binary],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        res = w.stdout.readlines()
+        if len(res) == 0:
+            raise FileNotFoundError(f"{binary} not found")
+        return os.path.realpath(res[0].strip())
+    except FileNotFoundError:
+        if os.path.isfile(binary):
+            return os.path.realpath(binary)
+        else:
+            raise FileNotFoundError(f"{binary} not found")

@@ -27,7 +27,7 @@ import signal
 from bcc import BPF, syscall
 
 from src import defs
-from src.utils import syscall_name, parse_args
+from src.utils import syscall_name, parse_args, drop_privileges, which
 
 signal.signal(signal.SIGINT, lambda x, y: sys.exit())
 signal.signal(signal.SIGTERM, lambda x, y: sys.exit())
@@ -41,6 +41,7 @@ class BPFBench:
         self.bpf = None
         self.start_time = None
         self.should_exit = 0
+        self.trace_pid = 0
         self.timer_thread = threading.Thread(target=self.timer)
         self.timer_thread.setDaemon(1)
 
@@ -54,6 +55,8 @@ class BPFBench:
         # Add BPF_PATH for header includes
         flags.append(f'-I{defs.BPF_PATH}')
         flags.append(f'-DNUM_SYSCALLS={len(syscall.syscalls)}')
+        if self.trace_pid > 0:
+            flags.append(f'-DTRACE_PID={self.trace_pid}')
 
         # Load BPF program
         self.bpf = BPF(src_file=f'{defs.BPF_PATH}/bpf_program.c', cflags=flags)
@@ -66,6 +69,7 @@ class BPFBench:
         Timer for controlling duration and checkpoint.
         """
         seconds = 0
+        self.start_time = datetime.datetime.now()
         while 1:
             seconds += 1
             if seconds % self.args.checkpoint.total_seconds() == 0:
@@ -92,17 +96,12 @@ class BPFBench:
             results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead / 1e3}
         return results
 
+    @drop_privileges
     def save_results(self):
         """
         Save benchmark results.
         """
         results = self.get_results()
-        # Drop privileges
-        try:
-            os.setegid(int(os.getenv('SUDO_GID')))
-            os.seteuid(int(os.getenv('SUDO_UID')))
-        except TypeError:
-            print("Warning: Unable to drop privileges before saving!", file=sys.stderr)
         with open(self.args.outfile, 'w') as f:
             results_str = ''
             # Add timestamp
@@ -118,18 +117,42 @@ class BPFBench:
                     v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
                 results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}\n'
             f.write(results_str + '\n')
-        # Get privileges back
-        os.seteuid(0)
-        os.setegid(0)
+
+    def handle_sigchld(self, x, y):
+        """
+        Handle SIGCHLD.
+        """
+        os.wait()
+        sys.exit(0)
+
+    @drop_privileges
+    def run_binary(self, binary, args):
+        binary = which(binary)
+        # Wake up and do nothing on SIGUSR1
+        signal.signal(signal.SIGUSR1, lambda x,y: None)
+        # Reap zombies
+        signal.signal(signal.SIGCHLD, self.handle_sigchld)
+        pid = os.fork()
+        # Setup traced process
+        if pid == 0:
+            signal.pause()
+            os.execvp(binary, args)
+        # Return pid of traced process
+        return pid
 
     def bench(self):
         """
         Run benchmarking.
         """
+        # Maybe run a program
+        if self.args.run:
+            self.trace_pid = self.run_binary(self.args.run, self.args.runargs)
+
         # Load BPF program
         self.load_bpf()
 
-        self.start_time = datetime.datetime.now()
+        if self.args.run and self.trace_pid:
+            os.kill(self.trace_pid, signal.SIGUSR1)
 
         # Start the timer
         self.timer_thread.start()
