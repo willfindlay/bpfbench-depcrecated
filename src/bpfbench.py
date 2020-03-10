@@ -62,6 +62,7 @@ class BPFBench:
         self.bpf = BPF(src_file=f'{defs.BPF_PATH}/bpf_program.c', cflags=flags)
 
         # Register exit hook
+        atexit.unregister(self.bpf.cleanup)
         atexit.register(self.save_results)
 
     def timer(self):
@@ -123,6 +124,7 @@ class BPFBench:
         Handle SIGCHLD.
         """
         os.wait()
+        time.sleep(1)
         sys.exit(0)
 
     @drop_privileges
