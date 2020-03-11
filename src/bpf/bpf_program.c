@@ -38,6 +38,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
 {
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
+    /* Maybe filter by PID */
     #ifdef TRACE_PID
     if (pid_tgid >> 32 != TRACE_PID)
         return 0;
@@ -46,9 +47,12 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
     int zero = 0;
     struct intermediate_t start = {};
 
+    /* Record pit_tgid of initiating process */
     start.pid_tgid = pid_tgid;
+    /* Record start time */
     start.start_time = bpf_ktime_get_ns();
 
+    /* Pass data off to sys_exit */
     intermediate.update(&zero, &start);
 
     return 0;
@@ -58,6 +62,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
 {
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
+    /* Maybe filter by PID */
     #ifdef TRACE_PID
     if (pid_tgid >> 32 != TRACE_PID)
         return 0;

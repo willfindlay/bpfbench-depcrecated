@@ -23,6 +23,7 @@ import time
 import datetime
 import threading
 import signal
+import functools
 
 from bcc import BPF, syscall
 
@@ -40,6 +41,8 @@ class BPFBench:
         self.args = args
         self.bpf = None
         self.start_time = None
+        self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
+        self.checkpoint = functools.reduce(lambda a,b: a + b, self.args.checkpoint)
         self.should_exit = 0
         self.trace_pid = 0
         self.timer_thread = threading.Thread(target=self.timer)
@@ -65,6 +68,10 @@ class BPFBench:
         atexit.unregister(self.bpf.cleanup)
         atexit.register(self.save_results)
 
+    def on_exit(self):
+        self.save_results()
+        print('All done!', file=sys.stderr)
+
     def timer(self):
         """
         Timer for controlling duration and checkpoint.
@@ -72,12 +79,12 @@ class BPFBench:
         seconds = 0
         self.start_time = datetime.datetime.now()
         while 1:
-            seconds += 1
-            if seconds % self.args.checkpoint.total_seconds() == 0:
+            if seconds and seconds % self.checkpoint.total_seconds() == 0:
                 self.save_results()
-            if seconds >= self.args.duration.total_seconds():
+            if seconds >= self.duration.total_seconds():
                 self.should_exit = 1
             time.sleep(1)
+            seconds += 1
 
     def get_results(self):
         """
@@ -103,21 +110,23 @@ class BPFBench:
         Save benchmark results.
         """
         results = self.get_results()
-        with open(self.args.outfile, 'w') as f:
-            results_str = ''
-            # Add timestamp
-            curr_time = datetime.datetime.now()
-            # String += is O(n^2) in Python, don't try this at home, kids
-            results_str += f'Experiment start: {self.start_time}\n'
-            results_str += f'Current time:     {curr_time}\n'
-            results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
-            # Add header
-            results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"AVG. OVERHEAD(us)" if self.args.average else "OVERHEAD(us)":>22s}\n'
-            # Add results
-            for k, v in sorted(results.items(), key=lambda v: v[1]['sysnum'] if self.args.sort == 'sys' else
-                    v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
-                results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}\n'
-            f.write(results_str + '\n')
+        f = open(self.args.outfile, 'w') if self.args.outfile else sys.stderr
+        results_str = ''
+        # Add timestamp
+        curr_time = datetime.datetime.now()
+        # String += is O(n^2) in Python, don't try this at home, kids
+        results_str += f'Experiment start: {self.start_time}\n'
+        results_str += f'Current time:     {curr_time}\n'
+        results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
+        # Add header
+        results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"AVG. OVERHEAD(us)" if self.args.average else "OVERHEAD(us)":>22s}\n'
+        # Add results
+        for k, v in sorted(results.items(), key=lambda v: v[1]['sysnum'] if self.args.sort == 'sys' else
+                v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
+            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}\n'
+        f.write(results_str + '\n')
+        if self.args.outfile:
+            f.close()
 
     def handle_sigchld(self, x, y):
         """
@@ -145,12 +154,19 @@ class BPFBench:
         """
         Run benchmarking.
         """
+        print(f'Duration:   {self.duration}')
+        print(f'Checkpoint: {self.checkpoint}')
+
         # Maybe run a program
         if self.args.run:
+            print(f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration}...')
             self.trace_pid = self.run_binary(self.args.run, self.args.runargs)
-
-        if self.args.pid:
+        # Maybe trace a pid
+        elif self.args.pid:
+            print(f'Tracing pid {self.args.pid} for {self.duration}...')
             self.trace_pid = int(self.args.pid)
+        else:
+            print(f'Tracing system for {self.duration}...')
 
         # Load BPF program
         self.load_bpf()
@@ -163,7 +179,6 @@ class BPFBench:
         while 1:
             time.sleep(1)
             if self.should_exit:
-                time.sleep(1) # Sleep for another second just in case
                 sys.exit()
 
 def main():

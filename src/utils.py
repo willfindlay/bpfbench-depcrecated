@@ -98,11 +98,11 @@ def parse_args(sysargs=sys.argv[1:]):
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('duration', type=ParserTimeDeltaType(),
-            help="Duration to run benchmark. Supports values like: #[s] #m #h #d #w")
-    parser.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default='30m',
+    parser.add_argument('duration', type=ParserTimeDeltaType(), nargs='+',
+            help="Duration to run benchmark. Durations can be combined. Supports values like: #[s] #m #h #d #w")
+    parser.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default=[ParserTimeDeltaType()('30m')], nargs='+',
             help="Interval to checkpoint results. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
-    parser.add_argument('outfile', type=ParserNewFileType(),
+    parser.add_argument('-o', '--outfile', type=ParserNewFileType(),
             help="Location to save benchmark data.")
     parser.add_argument('--overwrite', action='store_true',
             help='Allow overwriting an existing outfile.')
@@ -129,7 +129,7 @@ def parse_args(sysargs=sys.argv[1:]):
             vars(args)['runargs'] = []
 
     # Check for overwrite
-    if not args.overwrite and os.path.exists(args.outfile):
+    if not args.overwrite and args.outfile and os.path.exists(args.outfile):
         parser.error(f"Cannot overwrite {args.outfile} without --overwrite.")
 
     # Check for root
