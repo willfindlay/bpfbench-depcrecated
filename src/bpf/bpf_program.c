@@ -73,7 +73,9 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
 
     /* Discard restarted syscalls due to system suspend */
     if (args->id == __NR_restart_syscall)
+    {
         return 0;
+    }
 
     struct data_t *data = syscalls.lookup(&syscall);
     struct intermediate_t *start = intermediate.lookup(&zero);
@@ -81,7 +83,9 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
     {
         /* We don't want to count twice for calls that return in two places */
         if (pid_tgid != start->pid_tgid)
+        {
             return 0;
+        }
         data->count++;
         data->overhead += bpf_ktime_get_ns() - start->start_time;
     }

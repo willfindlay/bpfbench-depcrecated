@@ -154,19 +154,19 @@ class BPFBench:
         """
         Run benchmarking.
         """
-        print(f'Duration:   {self.duration}')
-        print(f'Checkpoint: {self.checkpoint}')
+        print(f'Duration:   {self.duration}', file=sys.stderr)
+        print(f'Checkpoint: {self.checkpoint}', file=sys.stderr)
 
         # Maybe run a program
         if self.args.run:
-            print(f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration}...')
+            print(f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration}...', file=sys.stderr)
             self.trace_pid = self.run_binary(self.args.run, self.args.runargs)
         # Maybe trace a pid
         elif self.args.pid:
-            print(f'Tracing pid {self.args.pid} for {self.duration}...')
+            print(f'Tracing pid {self.args.pid} for {self.duration}...', file=sys.stderr)
             self.trace_pid = int(self.args.pid)
         else:
-            print(f'Tracing system for {self.duration}...')
+            print(f'Tracing system for {self.duration}...', file=sys.stderr)
 
         # Load BPF program
         self.load_bpf()
