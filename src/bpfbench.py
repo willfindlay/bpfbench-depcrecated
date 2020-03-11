@@ -124,8 +124,7 @@ class BPFBench:
         Handle SIGCHLD.
         """
         os.wait()
-        time.sleep(1)
-        sys.exit(0)
+        self.should_exit = 1
 
     @drop_privileges
     def run_binary(self, binary, args):
@@ -150,6 +149,9 @@ class BPFBench:
         if self.args.run:
             self.trace_pid = self.run_binary(self.args.run, self.args.runargs)
 
+        if self.args.pid:
+            self.trace_pid = int(self.args.pid)
+
         # Load BPF program
         self.load_bpf()
 
@@ -159,9 +161,10 @@ class BPFBench:
         # Start the timer
         self.timer_thread.start()
         while 1:
-            if self.should_exit:
-                sys.exit()
             time.sleep(1)
+            if self.should_exit:
+                time.sleep(1) # Sleep for another second just in case
+                sys.exit()
 
 def main():
     """

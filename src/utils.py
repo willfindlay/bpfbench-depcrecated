@@ -110,8 +110,11 @@ def parse_args(sysargs=sys.argv[1:]):
             help='Sort by system call number, count, or overhead. Defaults to overhead.')
     parser.add_argument('--average', action='store_true',
             help='Average overhead per syscall count instead printing total overhead.')
-    parser.add_argument('-r', '--run', metavar='prog', type=str,
+    micro = parser.add_mutually_exclusive_group()
+    micro.add_argument('-r', '--run', metavar='prog', type=str,
             help='Run program <prog> instead of benchmarking entire system. Provides microbenchmark functionality.')
+    micro.add_argument('-p', '--pid', metavar='pid', type=int,
+            help='Attach to program with pid <pid> instead of benchmarking entire system. Provides microbenchmark functionality.')
 
     # Hack to allow arguments to be passed to the analyzed program
     try:
