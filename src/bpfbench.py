@@ -67,7 +67,7 @@ class BPFBench:
 
         # Register exit hook
         atexit.unregister(self.bpf.cleanup)
-        atexit.register(self.save_results)
+        atexit.register(self.on_exit)
 
     def on_exit(self):
         self.save_results()
