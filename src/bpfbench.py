@@ -58,6 +58,7 @@ class BPFBench:
         # Add BPF_PATH for header includes
         flags.append(f'-I{defs.BPF_PATH}')
         flags.append(f'-DNUM_SYSCALLS={len(syscall.syscalls)}')
+        flags.append(f'-DBPFBENCH_PID={os.getpid()}')
         if self.trace_pid > 0:
             flags.append(f'-DTRACE_PID={self.trace_pid}')
 
@@ -76,15 +77,16 @@ class BPFBench:
         """
         Timer for controlling duration and checkpoint.
         """
-        seconds = 0
         self.start_time = datetime.datetime.now()
+        last_checkpoint = datetime.datetime.now()
         while 1:
-            if seconds and seconds % self.checkpoint.total_seconds() == 0:
+            curr_time = datetime.datetime.now()
+            if curr_time >= (last_checkpoint + self.checkpoint):
+                last_checkpoint = curr_time
                 self.save_results()
-            if seconds >= self.duration.total_seconds():
+            if curr_time >= self.duration + self.start_time:
                 self.should_exit = 1
             time.sleep(1)
-            seconds += 1
 
     def get_results(self):
         """

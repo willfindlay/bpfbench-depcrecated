@@ -44,6 +44,10 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
         return 0;
     #endif
 
+    /* Don't trace self */
+    if (pid_tgid >> 32 == BPFBENCH_PID)
+        return 0;
+
     int zero = 0;
     struct intermediate_t start = {};
 
@@ -67,6 +71,10 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
     if (pid_tgid >> 32 != TRACE_PID)
         return 0;
     #endif
+
+    /* Don't trace self */
+    if (pid_tgid >> 32 == BPFBENCH_PID)
+        return 0;
 
     int zero = 0;
     int syscall = args->id;
