@@ -101,9 +101,13 @@ class BPFBench:
                 overhead += syscall.overhead
             if not count:
                 continue
+            # Convert to us from ns
+            overhead = overhead / 1e3
+            results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead}
+            # Maybe get average
             if self.args.average:
-                overhead = overhead / (count if count else 1)
-            results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead / 1e3}
+                average_overhead = overhead / (count if count else 1)
+                results[syscall_name(key.value)]['avg_overhead'] = average_overhead
         return results
 
     @drop_privileges
@@ -121,11 +125,14 @@ class BPFBench:
         results_str += f'Current time:     {curr_time}\n'
         results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
         # Add header
-        results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"AVG. OVERHEAD(us)" if self.args.average else "OVERHEAD(us)":>22s}\n'
+        results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"OVERHEAD(us)":>22s}'
+        if self.args.average:
+            results_str += f' {"AVG_OVERHEAD(us/call)":>22s}'
+        results_str += '\n'
         # Add results
         for k, v in sorted(results.items(), key=lambda v: v[1]['sysnum'] if self.args.sort == 'sys' else
                 v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
-            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}\n'
+            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f} {v["avg_overhead"] :>22.3f}\n'
         f.write(results_str + '\n')
         if self.args.outfile:
             f.close()
