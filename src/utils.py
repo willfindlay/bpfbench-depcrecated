@@ -38,7 +38,6 @@ class ParserTimeDeltaType():
     Arguments of type timedelta.
     Works like the arguments to timeout(1).
     """
-
     formats = {
             'seconds': re.compile(r'^(\d+)[sS]?$'),
             'minutes': re.compile(r'^(\d+)[mM]$'),
@@ -73,7 +72,6 @@ class ParserNewFileType():
     Arguments of type new file.
     Intelligently prevents user from specifying an invalid path.
     """
-
     def __call__(self, path):
         d, f = os.path.split(path)
         # Make things absolute
