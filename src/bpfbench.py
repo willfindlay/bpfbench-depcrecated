@@ -69,6 +69,8 @@ class BPFBench:
         flags.append(f'-DBPFBENCH_PID={os.getpid()}')
         if self.trace_pid > 0:
             flags.append(f'-DTRACE_PID={self.trace_pid}')
+            if self.args.follow:
+                flags.append(f'-DFOLLOW')
 
         # Load BPF program
         self.bpf = BPF(src_file=f'{defs.BPF_PATH}/bpf_program.c', cflags=flags)

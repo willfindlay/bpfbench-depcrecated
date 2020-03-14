@@ -18,6 +18,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>. */
 
 #include <uapi/asm/unistd_64.h>
+#include <linux/sched.h>
 
 struct intermediate_t
 {
@@ -34,30 +35,82 @@ struct data_t
 BPF_PERCPU_ARRAY(intermediate, struct intermediate_t, 1);
 BPF_PERCPU_ARRAY(syscalls, struct data_t, NUM_SYSCALLS);
 
+#ifdef FOLLOW
+BPF_HASH(children, u32, u8);
+
+RAW_TRACEPOINT_PROBE(sched_process_fork)
+{
+    struct task_struct *p = (struct task_struct *)ctx->args[0];
+    struct task_struct *c = (struct task_struct *)ctx->args[1];
+
+    u32 ppid = p->tgid;
+
+    /* Filter ppid */
+    if (ppid != TRACE_PID && !children.lookup(&ppid))
+    {
+        return 0;
+    }
+
+    u32 cpid = c->tgid;
+
+    u8 zero = 0;
+
+    children.update(&cpid, &zero);
+
+    return 0;
+}
+
+RAW_TRACEPOINT_PROBE(sched_process_exit)
+{
+    u32 pid = (bpf_get_current_pid_tgid() >> 32);
+
+    /* Filter ppid */
+    if (pid != TRACE_PID && !children.lookup(&pid))
+    {
+        return 0;
+    }
+
+    children.delete(&pid);
+
+    return 0;
+}
+#endif
+
 TRACEPOINT_PROBE(raw_syscalls, sys_enter)
 {
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
     /* Maybe filter by PID */
-    #ifdef TRACE_PID
-    if (pid_tgid >> 32 != TRACE_PID)
+    #if defined(TRACE_PID) && defined(FOLLOW)
+    u32 pid = (pid_tgid >> 32);
+    if (pid != TRACE_PID && !children.lookup(&pid))
+    {
         return 0;
+    }
+    #elif defined(TRACE_PID)
+    if (pid_tgid >> 32 != TRACE_PID)
+    {
+        return 0;
+    }
     #endif
 
     /* Don't trace self */
     if (pid_tgid >> 32 == BPFBENCH_PID)
+    {
         return 0;
+    }
 
     int zero = 0;
-    struct intermediate_t start = {};
+    struct intermediate_t *start = intermediate.lookup(&zero);
+    if (!start)
+    {
+        return 0;
+    }
 
     /* Record pit_tgid of initiating process */
-    start.pid_tgid = pid_tgid;
+    start->pid_tgid = pid_tgid;
     /* Record start time */
-    start.start_time = bpf_ktime_get_ns();
-
-    /* Pass data off to sys_exit */
-    intermediate.update(&zero, &start);
+    start->start_time = bpf_ktime_get_ns();
 
     return 0;
 }
@@ -67,14 +120,24 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
     /* Maybe filter by PID */
-    #ifdef TRACE_PID
-    if (pid_tgid >> 32 != TRACE_PID)
+    #if defined(TRACE_PID) && defined(FOLLOW)
+    u32 pid = (pid_tgid >> 32);
+    if (pid != TRACE_PID && !children.lookup(&pid))
+    {
         return 0;
+    }
+    #elif defined(TRACE_PID)
+    if (pid_tgid >> 32 != TRACE_PID)
+    {
+        return 0;
+    }
     #endif
 
     /* Don't trace self */
     if (pid_tgid >> 32 == BPFBENCH_PID)
+    {
         return 0;
+    }
 
     int zero = 0;
     int syscall = args->id;
@@ -92,6 +155,7 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
         /* We don't want to count twice for calls that return in two places */
         if (pid_tgid != start->pid_tgid)
         {
+            bpf_trace_printk("syscall %ld: return pid: %lu start pid: %lu\n", args->id, pid_tgid >> 32, start->pid_tgid >> 32);
             return 0;
         }
         data->count++;

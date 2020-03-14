@@ -99,9 +99,9 @@ def parse_args(sysargs=sys.argv[1:]):
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
     parser.add_argument('-d', '--duration', type=ParserTimeDeltaType(), nargs='+',
-            help="Duration to run benchmark. Durations can be combined. Supports values like: #[s] #m #h #d #w")
+            help="Duration to run benchmark. Durations can be combined. Defaults to forever. Supports values like: #[s] #m #h #d #w")
     parser.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default=[ParserTimeDeltaType()('30m')], nargs='+',
-            help="Interval to checkpoint results. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
+            help="Interval to checkpoint results. Durations can be combined. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
     parser.add_argument('-o', '--outfile', type=ParserNewFileType(),
             help="Location to save benchmark data.")
     parser.add_argument('--overwrite', action='store_true',
@@ -114,7 +114,9 @@ def parse_args(sysargs=sys.argv[1:]):
     micro.add_argument('-r', '--run', metavar='prog', type=str,
             help='Run program <prog> instead of benchmarking entire system. Provides microbenchmark functionality.')
     micro.add_argument('-p', '--pid', metavar='pid', type=int,
-            help='Attach to program with pid <pid> instead of benchmarking entire system. Provides microbenchmark functionality.')
+            help='Attach to program with userspace pid <pid> instead of benchmarking entire system. Provides microbenchmark functionality.')
+    parser.add_argument('-f', '--follow', action='store_true',
+            help='Follow clone(2) calls. Only makes sense when used with -p or -r.')
 
     # Hack to allow arguments to be passed to the analyzed program
     try:
@@ -127,6 +129,10 @@ def parse_args(sysargs=sys.argv[1:]):
         except ValueError:
             args = parser.parse_args(sysargs)
             vars(args)['runargs'] = []
+
+    # Check for whether follow makes sense
+    if args.follow and not (args.run or args.pid):
+        parser.error(f"Setting follow mode only makes sense when running with --pid or --run.")
 
     # Check for overwrite
     if not args.overwrite and args.outfile and os.path.exists(args.outfile):
