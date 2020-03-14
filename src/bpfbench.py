@@ -41,10 +41,18 @@ class BPFBench:
         self.args = args
         self.bpf = None
         self.start_time = None
-        self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
+        # Maybe get duration
+        try:
+            self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
+        except TypeError:
+            self.duration = None
+        # Get checkpoint
         self.checkpoint = functools.reduce(lambda a,b: a + b, self.args.checkpoint)
+        # Set should_exit to 0
         self.should_exit = 0
+        # Set trace_pid to 0 for now
         self.trace_pid = 0
+        # Timer thread stuff
         self.timer_thread = threading.Thread(target=self.timer)
         self.timer_thread.setDaemon(1)
 
@@ -84,9 +92,21 @@ class BPFBench:
             if curr_time >= (last_checkpoint + self.checkpoint):
                 last_checkpoint = curr_time
                 self.save_results()
-            if curr_time >= self.duration + self.start_time:
+            if self.duration and curr_time >= self.duration + self.start_time:
                 self.should_exit = 1
             time.sleep(1)
+
+    def sort_func(self, v):
+        if self.args.sort == 'sys':
+            return v[1]['sysnum']
+        if self.args.sort == 'count':
+            return v[1]['count']
+        if self.args.sort == 'overhead':
+            try:
+                return v[1]['avg_overhead']
+            except:
+                return v[1]['overhead']
+        raise TypeError(f"Unable to sort based on {self.args.sort}")
 
     def get_results(self):
         """
@@ -126,13 +146,17 @@ class BPFBench:
         results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
         # Add header
         results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"OVERHEAD(us)":>22s}'
+        # Maybe add average overhead
         if self.args.average:
             results_str += f' {"AVG_OVERHEAD(us/call)":>22s}'
         results_str += '\n'
         # Add results
-        for k, v in sorted(results.items(), key=lambda v: v[1]['sysnum'] if self.args.sort == 'sys' else
-                v[1]['count'] if self.args.sort == 'count' else v[1]['overhead'] if self.args.sort == 'overhead' else v[1], reverse=1):
-            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f} {v["avg_overhead"] :>22.3f}\n'
+        for k, v in sorted(results.items(), key=self.sort_func, reverse=1):
+            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}'
+            # Maybe add average overhead
+            if self.args.average:
+                results_str += f'{v["avg_overhead"] :>22.3f}'
+            results_str += '\n'
         f.write(results_str + '\n')
         if self.args.outfile:
             f.close()
@@ -163,19 +187,19 @@ class BPFBench:
         """
         Run benchmarking.
         """
-        print(f'Duration:   {self.duration}', file=sys.stderr)
+        print(f'Duration:   {self.duration if self.duration else "Forever"}', file=sys.stderr)
         print(f'Checkpoint: {self.checkpoint}', file=sys.stderr)
 
         # Maybe run a program
         if self.args.run:
-            print(f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration}...', file=sys.stderr)
+            print(f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration if self.duration else "Forever"}...', file=sys.stderr)
             self.trace_pid = self.run_binary(self.args.run, self.args.runargs)
         # Maybe trace a pid
         elif self.args.pid:
-            print(f'Tracing pid {self.args.pid} for {self.duration}...', file=sys.stderr)
+            print(f'Tracing pid {self.args.pid} for {self.duration if self.duration else "Forever"}...', file=sys.stderr)
             self.trace_pid = int(self.args.pid)
         else:
-            print(f'Tracing system for {self.duration}...', file=sys.stderr)
+            print(f'Tracing system for {self.duration if self.duration else "Forever"}...', file=sys.stderr)
 
         # Load BPF program
         self.load_bpf()

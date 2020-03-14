@@ -98,7 +98,7 @@ def parse_args(sysargs=sys.argv[1:]):
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('duration', type=ParserTimeDeltaType(), nargs='+',
+    parser.add_argument('-d', '--duration', type=ParserTimeDeltaType(), nargs='+',
             help="Duration to run benchmark. Durations can be combined. Supports values like: #[s] #m #h #d #w")
     parser.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default=[ParserTimeDeltaType()('30m')], nargs='+',
             help="Interval to checkpoint results. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
@@ -162,9 +162,14 @@ def drop_privileges(function):
         # Get proper GID
         try:
             sudo_gid = int(os.environ['SUDO_GID'])
-        except (KeyError, ValueError) as e:
+        except (KeyError, ValueError):
             print("Could not get GID for sudoer", file=sys.stderr)
             return
+        # Make sure groups are reset
+        try:
+            os.setgroups([])
+        except PermissionError:
+            pass
         # Drop root
         os.setresgid(sudo_gid, sudo_gid, -1)
         os.setresuid(sudo_uid, sudo_uid, -1)
