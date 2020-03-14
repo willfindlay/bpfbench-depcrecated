@@ -145,7 +145,10 @@ class BPFBench:
         # String += is O(n^2) in Python, don't try this at home, kids
         results_str += f'Experiment start: {self.start_time}\n'
         results_str += f'Current time:     {curr_time}\n'
-        results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
+        try:
+            results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
+        except TypeError:
+            pass
         # Add header
         results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"OVERHEAD(us)":>22s}'
         # Maybe add average overhead

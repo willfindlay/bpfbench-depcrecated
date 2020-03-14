@@ -19,6 +19,7 @@
 
 #include <uapi/asm/unistd_64.h>
 #include <linux/sched.h>
+#include <linux/signal.h>
 
 struct intermediate_t
 {
@@ -107,7 +108,8 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
         return 0;
     }
 
-    /* Record pit_tgid of initiating process */
+    /* Record pit_tgid of initiating process,
+     * we use this for error checking later */
     start->pid_tgid = pid_tgid;
     /* Record start time */
     start->start_time = bpf_ktime_get_ns();
