@@ -155,7 +155,6 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
         /* We don't want to count twice for calls that return in two places */
         if (pid_tgid != start->pid_tgid)
         {
-            bpf_trace_printk("syscall %ld: return pid: %lu start pid: %lu\n", args->id, pid_tgid >> 32, start->pid_tgid >> 32);
             return 0;
         }
         data->count++;
