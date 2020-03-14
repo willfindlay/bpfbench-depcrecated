@@ -161,6 +161,11 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
         data->count++;
         data->overhead += bpf_ktime_get_ns() - start->start_time;
     }
+    if (start)
+    {
+        start->pid_tgid = 0;
+        start->start_time = 0;
+    }
 
     return 0;
 }

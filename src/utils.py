@@ -98,25 +98,30 @@ def parse_args(sysargs=sys.argv[1:]):
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument('-d', '--duration', type=ParserTimeDeltaType(), nargs='+',
+    timings = parser.add_argument_group('TIMING OPTIONS')
+    timings.add_argument('-d', '--duration', type=ParserTimeDeltaType(), nargs='+',
             help="Duration to run benchmark. Durations can be combined. Defaults to forever. Supports values like: #[s] #m #h #d #w")
-    parser.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default=[ParserTimeDeltaType()('30m')], nargs='+',
+    timings.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default=[ParserTimeDeltaType()('30m')], nargs='+',
             help="Interval to checkpoint results. Durations can be combined. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
-    parser.add_argument('-o', '--outfile', type=ParserNewFileType(),
+
+    output = parser.add_argument_group('OUTPUT OPTIONS')
+    output.add_argument('-o', '--outfile', type=ParserNewFileType(),
             help="Location to save benchmark data.")
-    parser.add_argument('--overwrite', action='store_true',
+    output.add_argument('--overwrite', action='store_true',
             help='Allow overwriting an existing outfile.')
-    parser.add_argument('--sort', type=str, choices=['sys', 'count', 'overhead'], default='overhead',
+    output.add_argument('--sort', type=str, choices=['sys', 'count', 'overhead'], default='overhead',
             help='Sort by system call number, count, or overhead. Defaults to overhead.')
-    parser.add_argument('--average', action='store_true',
+    output.add_argument('--average', action='store_true',
             help='Average overhead per syscall count instead printing total overhead.')
-    micro = parser.add_mutually_exclusive_group()
+
+    _micro = parser.add_argument_group('MICRO-BENCHMARK OPTIONS')
+    micro = _micro.add_mutually_exclusive_group()
     micro.add_argument('-r', '--run', metavar='prog', type=str,
             help='Run program <prog> instead of benchmarking entire system. Provides microbenchmark functionality.')
     micro.add_argument('-p', '--pid', metavar='pid', type=int,
             help='Attach to program with userspace pid <pid> instead of benchmarking entire system. Provides microbenchmark functionality.')
-    parser.add_argument('-f', '--follow', action='store_true',
-            help='Follow clone(2) calls. Only makes sense when used with -p or -r.')
+    _micro.add_argument('-f', '--follow', action='store_true',
+            help='Follow child processes. Only makes sense when used with -p or -r.')
 
     # Hack to allow arguments to be passed to the analyzed program
     try:
