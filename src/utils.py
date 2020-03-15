@@ -26,11 +26,13 @@ import subprocess
 from bcc import syscall
 
 DESCRIPTION = """
-System benchmarking with eBPF.
-Right now, supports benchmarking system calls.
+bpfbench
+    System benchmarking with eBPF.
+    Right now, supports benchmarking system calls.
 """
 
 EPILOG = """
+    Copyright (C) 2020  William Findlay
 """
 
 class ParserTimeDeltaType():
@@ -94,30 +96,34 @@ def parse_args(sysargs=sys.argv[1:]):
     Argument parsing logic.
     """
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
-            formatter_class=argparse.RawDescriptionHelpFormatter)
+            formatter_class=argparse.RawTextHelpFormatter)
 
     timings = parser.add_argument_group('TIMING OPTIONS')
     timings.add_argument('-d', '--duration', type=ParserTimeDeltaType(), nargs='+',
-            help="Duration to run benchmark. Durations can be combined. Defaults to forever. Supports values like: #[s] #m #h #d #w")
+            help='Duration to run benchmark. Defaults to forever.\n'
+            'Supports values like: #[s] #m #h #d #w.\n'
+            'Durations can be combined like: 1m 30s.')
     timings.add_argument('-c', '--checkpoint', type=ParserTimeDeltaType(), default=[ParserTimeDeltaType()('30m')], nargs='+',
-            help="Interval to checkpoint results. Durations can be combined. Defaults to 30m. Supports values like: #[s] #m #h #d #w")
+            help='Interval to checkpoint results. Defaults to 30m.\n'
+            'Supports values like: #[s] #m #h #d #w.\n'
+            'Durations can be combined like: 1m 30s.')
 
     output = parser.add_argument_group('OUTPUT OPTIONS')
     output.add_argument('-o', '--outfile', type=ParserNewFileType(),
-            help="Location to save benchmark data.")
+            help="Location to save benchmark data. Overwriting existing files is disabled by default.")
     output.add_argument('--overwrite', action='store_true',
             help='Allow overwriting an existing outfile.')
     output.add_argument('--sort', type=str, choices=['sys', 'count', 'overhead'], default='overhead',
             help='Sort by system call number, count, or overhead. Defaults to overhead.')
-    output.add_argument('--average', action='store_true',
-            help='Average overhead per syscall count instead printing total overhead.')
+    output.add_argument('--noaverage', '--noavg', dest='average', action='store_false',
+            help='Do not print average overhead.')
 
     _micro = parser.add_argument_group('MICRO-BENCHMARK OPTIONS')
     micro = _micro.add_mutually_exclusive_group()
     micro.add_argument('-r', '--run', metavar='prog', type=str,
-            help='Run program <prog> instead of benchmarking entire system. Provides microbenchmark functionality.')
+            help='Run program <prog> instead of benchmarking entire system.')
     micro.add_argument('-p', '--pid', metavar='pid', type=int,
-            help='Attach to program with userspace pid <pid> instead of benchmarking entire system. Provides microbenchmark functionality.')
+            help='Attach to program with userspace pid <pid> instead of benchmarking entire system.')
     _micro.add_argument('-f', '--follow', action='store_true',
             help='Follow child processes. Only makes sense when used with -p or -r.')
 

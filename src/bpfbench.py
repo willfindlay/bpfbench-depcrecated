@@ -175,7 +175,11 @@ class BPFBench:
 
     @drop_privileges
     def run_binary(self, binary, args):
-        binary = which(binary)
+        try:
+            binary = which(binary)
+        except:
+            print(f'Unable to find {binary}... Exiting...')
+            sys.exit(-1)
         # Wake up and do nothing on SIGUSR1
         signal.signal(signal.SIGUSR1, lambda x,y: None)
         # Reap zombies
