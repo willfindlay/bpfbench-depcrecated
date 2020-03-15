@@ -1,0 +1,22 @@
+Experiment start: 2020-03-14 13:41:16.587998
+Current time:     2020-03-14 13:41:17.600658
+Seconds elapsed:  1.01266
+
+SYSCALL                   COUNT           OVERHEAD(us)  AVG_OVERHEAD(us/call)
+execve                        1                452.732               452.732
+munmap                        1                  5.255                 5.255
+write                         1                  5.045                 5.045
+getdents64                    2                  7.393                 3.696
+access                        1                  2.225                 2.225
+openat                        5                  9.742                 1.948
+mprotect                      5                  8.814                 1.763
+mmap                         13                 21.919                 1.686
+ioctl                         2                  2.342                 1.171
+read                          2                  1.558                 0.779
+fstat                         6                  2.660                 0.443
+brk                           3                  1.289                 0.430
+pread                         6                  1.759                 0.293
+arch_prctl                    2                  0.513                 0.257
+close                         7                  1.743                 0.249
+prctl                         6                  1.017                 0.169
+
