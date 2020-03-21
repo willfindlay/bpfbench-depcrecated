@@ -131,6 +131,8 @@ def parse_args(sysargs=sys.argv[1:]):
             help="Location to save benchmark data. Overwriting existing files is disabled by default.")
     output.add_argument('--overwrite', action='store_true',
             help='Allow overwriting an existing outfile.')
+    output.add_argument('--tee', action='store_true',
+            help='Print to stderr in addition to outfile.')
     output.add_argument('--sort', type=str, choices=['sys', 'count', 'overhead'], default='overhead',
             help='Sort by system call number, count, or overhead. Defaults to overhead.')
     output.add_argument('--noaverage', '--noavg', dest='average', action='store_false',
@@ -163,6 +165,14 @@ def parse_args(sysargs=sys.argv[1:]):
     # Check for whether follow makes sense
     if args.follow and not (args.run or args.pid):
         parser.error(f"Setting follow mode only makes sense when running with --pid or --run.")
+
+    # Check whether overwrite makes sense
+    if args.overwrite and not args.outfile:
+        parser.error(f"--overwrite does not make sense without --outfile.")
+
+    # Check whether tee makes sense
+    if args.tee and not args.outfile:
+        parser.error(f"--tee does not make sense without --outfile.")
 
     # Check for overwrite
     if not args.overwrite and args.outfile and os.path.exists(args.outfile):

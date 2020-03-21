@@ -164,6 +164,8 @@ class BPFBench:
                 results_str += f'{v["avg_overhead"] :>22.3f}'
             results_str += '\n'
         f.write(results_str + '\n')
+        if self.args.tee:
+            sys.stderr.write(results_str + '\n')
         if self.args.outfile:
             f.close()
 
