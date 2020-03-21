@@ -42,6 +42,7 @@ class BPFBench:
         self.args = args
         self.bpf = None
         self.start_time = None
+        self.last_checkpoint = None
         # Maybe get duration
         try:
             self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
@@ -88,12 +89,10 @@ class BPFBench:
         """
         Timer for controlling duration and checkpoint.
         """
-        self.start_time = datetime.datetime.now()
-        last_checkpoint = datetime.datetime.now()
         while 1:
             curr_time = datetime.datetime.now()
-            if curr_time >= (last_checkpoint + self.checkpoint):
-                last_checkpoint = curr_time
+            if curr_time >= (self.last_checkpoint + self.checkpoint):
+                self.last_checkpoint = curr_time
                 self.save_results()
             if self.duration and curr_time >= self.duration + self.start_time:
                 self.should_exit = 1
@@ -199,8 +198,12 @@ class BPFBench:
         """
         Run benchmarking.
         """
+        self.start_time = datetime.datetime.now()
+        self.last_checkpoint = datetime.datetime.now()
+
         print(f'Duration:   {self.duration if self.duration else "Forever"}', file=sys.stderr)
         print(f'Checkpoint: {self.checkpoint}', file=sys.stderr)
+        print(f'Start time: {self.start_time}', file=sys.stderr)
 
         # Maybe run a program
         if self.args.run:
