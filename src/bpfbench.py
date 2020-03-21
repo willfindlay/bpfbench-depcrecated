@@ -28,7 +28,7 @@ import functools
 from bcc import BPF, syscall
 
 from src import defs
-from src.utils import syscall_name, parse_args, drop_privileges, which
+from src.utils import syscall_name, parse_args, drop_privileges, which, get_syscall_prefix
 
 signal.signal(signal.SIGINT, lambda x, y: sys.exit())
 signal.signal(signal.SIGTERM, lambda x, y: sys.exit())
@@ -41,6 +41,11 @@ class BPFBench:
         self.args = args
         self.bpf = None
         self.start_time = None
+        #try:
+        #    self.support_kfuncs = BPF.support_kfunc()
+        #except AttributeError:
+        #    self.support_kfuncs = 0
+        self.support_kfuncs = 0
         # Maybe get duration
         try:
             self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
@@ -55,6 +60,33 @@ class BPFBench:
         # Timer thread stuff
         self.timer_thread = threading.Thread(target=self.timer)
         self.timer_thread.setDaemon(1)
+
+    def generate_kfuncs(self):
+        """
+        Generate kfuncs and kretfuncs.
+        """
+        kfuncs = []
+        prefix = get_syscall_prefix().decode('utf-8')
+        for s in syscall.syscalls:
+            name = syscall_name(s).strip('_')
+            fnname = ''.join([prefix, name])
+            # kfunc
+            kfunc = """
+                int kfunc__%s()
+                {
+                    return do_sysenter();
+                }
+            """ % (fnname)
+            # kretfunc
+            kretfunc = """
+                int kretfunc__%s(long ret)
+                {
+                    return do_sysexit(%d, ret);
+                }
+            """ % (fnname, s)
+            kfuncs.append(kfunc)
+            kfuncs.append(kretfunc)
+        return '\n'.join(kfuncs)
 
     def load_bpf(self):
         """
@@ -72,8 +104,16 @@ class BPFBench:
             if self.args.follow:
                 flags.append(f'-DFOLLOW')
 
+        with open(f'{defs.BPF_PATH}/bpf_program.c', 'r') as f:
+            bpf_program = f.read()
+
+        # Maybe use kfuncs
+        if self.support_kfuncs:
+            flags.append(f'-DKFUNC_SUPPORT')
+            bpf_program = bpf_program.replace('__DEFINE_KFUNCS', self.generate_kfuncs())
+
         # Load BPF program
-        self.bpf = BPF(src_file=f'{defs.BPF_PATH}/bpf_program.c', cflags=flags)
+        self.bpf = BPF(text=bpf_program, cflags=flags)
 
         # Register exit hook
         atexit.unregister(self.bpf.cleanup)

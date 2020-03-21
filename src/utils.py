@@ -23,7 +23,7 @@ import re
 import datetime
 import subprocess
 
-from bcc import syscall
+from bcc import BPF, syscall
 
 DESCRIPTION = """
 bpfbench
@@ -34,6 +34,16 @@ bpfbench
 EPILOG = """
     Copyright (C) 2020  William Findlay
 """
+
+_syscall_prefixes = [
+        b"sys_",
+        b"__x64_sys_",
+        b"__x32_compat_sys_",
+        b"__ia32_compat_sys_",
+        b"__arm64_sys_",
+        b"__s390x_sys_",
+        b"__s390_sys_",
+    ]
 
 class ParserTimeDeltaType():
     """
@@ -213,3 +223,9 @@ def which(binary):
             return os.path.realpath(binary)
         else:
             raise FileNotFoundError(f"{binary} not found")
+
+def get_syscall_prefix():
+    for prefix in _syscall_prefixes:
+        if BPF.ksymname(b"%sbpf" % prefix) != -1:
+            return prefix
+    return _syscall_prefixes[0]

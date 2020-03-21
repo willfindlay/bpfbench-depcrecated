@@ -77,7 +77,7 @@ RAW_TRACEPOINT_PROBE(sched_process_exit)
 }
 #endif
 
-TRACEPOINT_PROBE(raw_syscalls, sys_enter)
+static inline int do_sysenter()
 {
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
@@ -117,8 +117,21 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
     return 0;
 }
 
-TRACEPOINT_PROBE(raw_syscalls, sys_exit)
+static inline int do_sysexit(long syscall, long ret)
 {
+    /* Discard restarted syscalls due to system suspend */
+    if (syscall == __NR_restart_syscall)
+    {
+        return 0;
+    }
+
+    /* Ignore system calls that would restart */
+    if (ret == -ERESTARTSYS || ret == -ERESTARTNOHAND
+            || ret == -ERESTARTNOINTR || ret == -ERESTART_RESTARTBLOCK)
+    {
+        return 0;
+    }
+
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
     /* Maybe filter by PID */
@@ -142,15 +155,8 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
     }
 
     int zero = 0;
-    int syscall = args->id;
 
-    /* Discard restarted syscalls due to system suspend */
-    if (args->id == __NR_restart_syscall)
-    {
-        return 0;
-    }
-
-    struct data_t *data = syscalls.lookup(&syscall);
+    struct data_t *data = syscalls.lookup((int *)&syscall);
     struct intermediate_t *start = intermediate.lookup(&zero);
     if (start && data)
     {
@@ -170,3 +176,17 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
 
     return 0;
 }
+
+#ifdef KFUNC_SUPPORT
+__DEFINE_KFUNCS
+#else
+TRACEPOINT_PROBE(raw_syscalls, sys_enter)
+{
+    return do_sysenter();
+}
+
+TRACEPOINT_PROBE(raw_syscalls, sys_exit)
+{
+    return do_sysexit(args->id, args->ret);
+}
+#endif
