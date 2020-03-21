@@ -28,7 +28,8 @@ import functools
 from bcc import BPF, syscall
 
 from src import defs
-from src.utils import syscall_name, parse_args, drop_privileges, which
+from src.parse_args import parse_args
+from src.utils import syscall_name, drop_privileges, which
 
 signal.signal(signal.SIGINT, lambda x, y: sys.exit())
 signal.signal(signal.SIGTERM, lambda x, y: sys.exit())

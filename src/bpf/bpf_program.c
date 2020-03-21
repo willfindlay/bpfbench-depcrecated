@@ -35,10 +35,13 @@ struct data_t
 
 BPF_PERCPU_ARRAY(intermediate, struct intermediate_t, 1);
 BPF_PERCPU_ARRAY(syscalls, struct data_t, NUM_SYSCALLS);
-
 #ifdef FOLLOW
 BPF_HASH(children, u32, u8);
+#endif
 
+static inline int do_
+
+#ifdef FOLLOW
 RAW_TRACEPOINT_PROBE(sched_process_fork)
 {
     struct task_struct *p = (struct task_struct *)ctx->args[0];
@@ -119,6 +122,19 @@ TRACEPOINT_PROBE(raw_syscalls, sys_enter)
 
 TRACEPOINT_PROBE(raw_syscalls, sys_exit)
 {
+    /* Discard restarted syscalls due to system suspend */
+    if (args->id == __NR_restart_syscall)
+    {
+        return 0;
+    }
+
+    /* Ignore system calls that would restart */
+    if (ret == -ERESTARTSYS || ret == -ERESTARTNOHAND
+            || ret == -ERESTARTNOINTR || ret == -ERESTART_RESTARTBLOCK)
+    {
+        return 0;
+    }
+
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
     /* Maybe filter by PID */
@@ -143,12 +159,6 @@ TRACEPOINT_PROBE(raw_syscalls, sys_exit)
 
     int zero = 0;
     int syscall = args->id;
-
-    /* Discard restarted syscalls due to system suspend */
-    if (args->id == __NR_restart_syscall)
-    {
-        return 0;
-    }
 
     struct data_t *data = syscalls.lookup(&syscall);
     struct intermediate_t *start = intermediate.lookup(&zero);
