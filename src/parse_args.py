@@ -83,6 +83,11 @@ class ParserNewFileType():
         if os.path.exists(path):
             return os.access(path, os.W_OK)
         d, f = os.path.split(path)
+        try:
+            d = os.path.realpath(d)
+        except:
+            # Parent dir doesn't exist
+            return False
         return os.access(d, os.W_OK)
 
     def __call__(self, path):
@@ -100,7 +105,7 @@ class ParserNewFileType():
         if os.path.isdir(f):
             raise argparse.ArgumentTypeError(f'{f} is a directory.')
         if not self.check_access(path):
-            raise argparse.ArgumentTypeError(f'No permissions to write {f}.')
+            raise argparse.ArgumentTypeError(f'No permissions to write to location {d}/{f}.')
         # Join f with new d
         return os.path.join(d, f)
 
@@ -111,7 +116,7 @@ def parse_args(sysargs=sys.argv[1:]):
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
             formatter_class=argparse.RawTextHelpFormatter)
 
-    timings = parser.add_argument_group('TIMING OPTIONS')
+    timings = parser.add_argument_group('timing options')
     timings.add_argument('-d', '--duration', type=ParserTimeDeltaType(), nargs='+',
             help='Duration to run benchmark. Defaults to forever.\n'
             'Supports values like: #[s] #m #h #d #w.\n'
@@ -121,7 +126,7 @@ def parse_args(sysargs=sys.argv[1:]):
             'Supports values like: #[s] #m #h #d #w.\n'
             'Durations can be combined like: 1m 30s.')
 
-    output = parser.add_argument_group('OUTPUT OPTIONS')
+    output = parser.add_argument_group('output options')
     output.add_argument('-o', '--outfile', type=ParserNewFileType(),
             help="Location to save benchmark data. Overwriting existing files is disabled by default.")
     output.add_argument('--overwrite', action='store_true',
@@ -131,7 +136,7 @@ def parse_args(sysargs=sys.argv[1:]):
     output.add_argument('--noaverage', '--noavg', dest='average', action='store_false',
             help='Do not print average overhead.')
 
-    _micro = parser.add_argument_group('MICRO-BENCHMARK OPTIONS')
+    _micro = parser.add_argument_group('micro-benchmark options')
     micro = _micro.add_mutually_exclusive_group()
     micro.add_argument('-r', '--run', metavar='prog', type=str,
             help='Run program <prog> instead of benchmarking entire system.')
@@ -139,6 +144,9 @@ def parse_args(sysargs=sys.argv[1:]):
             help='Attach to program with userspace pid <pid> instead of benchmarking entire system.')
     _micro.add_argument('-f', '--follow', action='store_true',
             help='Follow child processes. Only makes sense when used with -p or -r.')
+
+    parser.add_argument('--debug', action='store_true',
+            help=argparse.SUPPRESS)
 
     # Hack to allow arguments to be passed to the analyzed program
     try:
