@@ -54,6 +54,11 @@ class BPFBench:
         self.should_exit = 0
         # Set trace_pid to 0 for now
         self.trace_pid = 0
+        # Should sort be reversed?
+        if self.args.sort in ['count', 'overhead', 'avg_overhead']:
+            self.reverse_sort = 1
+        else:
+            self.reverse_sort = 0
         # Timer thread stuff
         self.timer_thread = threading.Thread(target=self.timer)
         self.timer_thread.setDaemon(1)
@@ -82,6 +87,7 @@ class BPFBench:
         atexit.register(self.on_exit)
 
     def on_exit(self):
+        print(file=sys.stderr)
         self.save_results()
         print('All done!', file=sys.stderr)
 
@@ -99,16 +105,15 @@ class BPFBench:
             time.sleep(1)
 
     def sort_func(self, v):
-        if self.args.sort == 'sys':
-            return v[1]['sysnum']
-        if self.args.sort == 'count':
-            return v[1]['count']
-        if self.args.sort == 'overhead':
-            try:
-                return v[1]['avg_overhead']
-            except:
-                return v[1]['overhead']
-        raise TypeError(f"Unable to sort based on {self.args.sort}")
+        """
+        Return correct dict value based on sort argument.
+        """
+        if self.args.sort == 'sysname':
+            return v[0]
+        try:
+            return v[1][self.args.sort]
+        except:
+            raise TypeError(f"Unable to sort based on {self.args.sort}")
 
     def get_results(self):
         """
@@ -126,10 +131,9 @@ class BPFBench:
             # Convert to us from ns
             overhead = overhead / 1e3
             results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead}
-            # Maybe get average
-            if self.args.average:
-                average_overhead = overhead / (count if count else 1)
-                results[syscall_name(key.value)]['avg_overhead'] = average_overhead
+            # Get average
+            average_overhead = overhead / (count if count else 1)
+            results[syscall_name(key.value)]['avg_overhead'] = average_overhead
         return results
 
     @drop_privileges
@@ -143,24 +147,19 @@ class BPFBench:
         # Add timestamp
         curr_time = datetime.datetime.now()
         # String += is O(n^2) in Python, don't try this at home, kids
-        results_str += f'Experiment start: {self.start_time}\n'
-        results_str += f'Current time:     {curr_time}\n'
-        try:
-            results_str += f'Seconds elapsed:  {(curr_time - self.start_time).total_seconds()}\n\n'
-        except TypeError:
-            pass
+        results_str += f'Start time:   {self.start_time}\n'
+        results_str += f'Current time: {curr_time}\n'
+        results_str += f'Time elapsed: {(curr_time - self.start_time)}\n\n'
         # Add header
-        results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"OVERHEAD(us)":>22s}'
-        # Maybe add average overhead
-        if self.args.average:
-            results_str += f' {"AVG_OVERHEAD(us/call)":>22s}'
+        if self.args.sysnum:
+            results_str += f'{"NUM":<3s} '
+        results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"OVERHEAD(us)":>22s} {"AVG_OVERHEAD(us/call)":>22s}'
         results_str += '\n'
         # Add results
-        for k, v in sorted(results.items(), key=self.sort_func, reverse=1):
-            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}'
-            # Maybe add average overhead
-            if self.args.average:
-                results_str += f'{v["avg_overhead"] :>22.3f}'
+        for k, v in sorted(results.items(), key=self.sort_func, reverse=self.reverse_sort):
+            if self.args.sysnum:
+                results_str += f'{v["sysnum"]:<3d} '
+            results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}{v["avg_overhead"] :>22.3f}'
             results_str += '\n'
         f.write(results_str + '\n')
         if self.args.tee:

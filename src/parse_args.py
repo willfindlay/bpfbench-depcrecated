@@ -34,6 +34,8 @@ EPILOG = """
     Copyright (C) 2020  William Findlay
 """
 
+SORT_CHOICES=['sysname', 'sysnum', 'count', 'overhead', 'avg_overhead']
+
 class ParserTimeDeltaType():
     """
     Arguments of type timedelta.
@@ -133,10 +135,12 @@ def parse_args(sysargs=sys.argv[1:]):
             help='Allow overwriting an existing outfile.')
     output.add_argument('--tee', action='store_true',
             help='Print to stderr in addition to outfile.')
-    output.add_argument('--sort', type=str, choices=['sys', 'count', 'overhead'], default='overhead',
-            help='Sort by system call number, count, or overhead. Defaults to overhead.')
-    output.add_argument('--noaverage', '--noavg', dest='average', action='store_false',
-            help='Do not print average overhead.')
+    output.add_argument('--sort', type=str, choices=SORT_CHOICES, default='avg_overhead',
+            help=f'Sort by {", ".join(SORT_CHOICES)}. Defaults to avg_overhead.')
+    #output.add_argument('--noaverage', '--noavg', dest='average', action='store_false',
+    #        help='Do not print average overhead.')
+    output.add_argument('--sysnum', action='store_true',
+            help='Print system call number.')
 
     _micro = parser.add_argument_group('micro-benchmark options')
     micro = _micro.add_mutually_exclusive_group()
