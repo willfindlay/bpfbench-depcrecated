@@ -22,6 +22,7 @@ import argparse
 import datetime
 import re
 
+from src import defs
 from src.utils import drop_privileges
 
 DESCRIPTION = """
@@ -111,6 +112,38 @@ class ParserNewFileType():
         # Join f with new d
         return os.path.join(d, f)
 
+class ParserWritableDirType():
+    """
+    Arguments of type writable dir.
+    Intelligently prevents user from specifying an invalid path.
+    """
+    @drop_privileges
+    def check_access(self, path):
+        """
+        Check whether we would have access to the file.
+        NOTE: This is for error prevention, NOT for security.
+        We will ALWAYS drop privileges before writing to a file.
+        """
+        if os.path.exists(path):
+            return os.access(path, os.W_OK)
+        return False
+
+    def __call__(self, path):
+        # Make things absolute
+        try:
+            path = os.path.realpath(path)
+        except:
+            # Parent dir doesn't exist
+            raise argparse.ArgumentTypeError(f'Directory {path} does not exist.')
+        # Check if path is a dir
+        if not os.path.isdir(path):
+            raise argparse.ArgumentTypeError(f'{path} is not a directory.')
+        # Check if we can append to path
+        if not self.check_access(path):
+            raise argparse.ArgumentTypeError(f'No permissions to add files to location {path}.')
+        # Join child with new parent
+        return path
+
 def parse_args(sysargs=sys.argv[1:]):
     """
     Argument parsing logic.
@@ -129,12 +162,13 @@ def parse_args(sysargs=sys.argv[1:]):
             'Durations can be combined like: 1m 30s.')
 
     output = parser.add_argument_group('output options')
-    output.add_argument('-o', '--outfile', type=ParserNewFileType(),
-            help="Location to save benchmark data. Overwriting existing files is disabled by default.")
+    output.add_argument('-o', '--outdir', type=ParserWritableDirType(),
+            help="Location to save benchmark data. The ability to potentially overwrite "
+            "existing files is disabled by default.")
     output.add_argument('--overwrite', action='store_true',
-            help='Allow overwriting an existing outfile.')
+            help='Allow potential overwriting of existing files in outdir.')
     output.add_argument('--tee', action='store_true',
-            help='Print to stderr in addition to outfile.')
+            help='Print to stderr in addition to outdir.')
     output.add_argument('--sort', type=str, choices=SORT_CHOICES, default='avg_overhead',
             help=f'Sort by {", ".join(SORT_CHOICES)}. Defaults to avg_overhead.')
     #output.add_argument('--noaverage', '--noavg', dest='average', action='store_false',
@@ -171,16 +205,18 @@ def parse_args(sysargs=sys.argv[1:]):
         parser.error(f"Setting follow mode only makes sense when running with --pid or --run.")
 
     # Check whether overwrite makes sense
-    if args.overwrite and not args.outfile:
-        parser.error(f"--overwrite does not make sense without --outfile.")
+    if args.overwrite and not args.outdir:
+        parser.error(f"--overwrite does not make sense without --outdir.")
 
     # Check whether tee makes sense
-    if args.tee and not args.outfile:
-        parser.error(f"--tee does not make sense without --outfile.")
+    if args.tee and not args.outdir:
+        parser.error(f"--tee does not make sense without --outdir.")
 
     # Check for overwrite
-    if not args.overwrite and args.outfile and os.path.exists(args.outfile):
-        parser.error(f"Cannot overwrite {args.outfile} without --overwrite.")
+    if not args.overwrite and args.outdir:
+        for f in os.listdir(args.outdir):
+            if defs.PREFIX in f:
+                parser.error(f"Refusing to potentially overwrite files in {args.outdir} without --overwrite.")
 
     # Check for root
     if os.geteuid() != 0:

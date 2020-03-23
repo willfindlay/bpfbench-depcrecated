@@ -43,6 +43,7 @@ class BPFBench:
         self.bpf = None
         self.start_time = None
         self.last_checkpoint = None
+        self.checknum = 0
         # Maybe get duration
         try:
             self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
@@ -142,8 +143,10 @@ class BPFBench:
         Save benchmark results.
         """
         results = self.get_results()
-        f = open(self.args.outfile, 'w') if self.args.outfile else sys.stderr
         results_str = ''
+        # Maybe open file for writing
+        f = open(os.path.join(self.args.outdir, f'{defs.PREFIX}.{self.checknum}'), 'w') if self.args.outdir else sys.stderr
+        self.checknum += 1
         # Add timestamp
         curr_time = datetime.datetime.now()
         # String += is O(n^2) in Python, don't try this at home, kids
@@ -162,9 +165,11 @@ class BPFBench:
             results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}{v["avg_overhead"] :>22.3f}'
             results_str += '\n'
         f.write(results_str + '\n')
+        # Maybe duplicate output
         if self.args.tee:
             sys.stderr.write(results_str + '\n')
-        if self.args.outfile:
+        # Maybe close file
+        if self.args.outdir:
             f.close()
 
     def handle_sigchld(self, x, y):
