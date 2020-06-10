@@ -17,20 +17,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>. */
 
-#include <uapi/asm/unistd_64.h>
 #include <linux/sched.h>
 #include <linux/signal.h>
+#include <uapi/asm/unistd_64.h>
 
 /* structs below this line -------------------------------------------------- */
 
-struct intermediate_t
-{
+struct intermediate_t {
     u64 pid_tgid;
     u64 start_time;
 };
 
-struct data_t
-{
+struct data_t {
     u64 count;
     u64 overhead;
 };
@@ -45,34 +43,29 @@ BPF_HASH(children, u32, u8);
 
 /* helpers below this line -------------------------------------------------- */
 
-static inline int do_sysenter(long syscall)
-{
+static inline int do_sysenter(long syscall) {
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
-    /* Maybe filter by PID */
-    #if defined(TRACE_PID) && defined(FOLLOW)
+/* Maybe filter by PID */
+#if defined(TRACE_PID) && defined(FOLLOW)
     u32 pid = (pid_tgid >> 32);
-    if (pid != TRACE_PID && !children.lookup(&pid))
-    {
+    if (pid != TRACE_PID && !children.lookup(&pid)) {
         return 0;
     }
-    #elif defined(TRACE_PID)
-    if (pid_tgid >> 32 != TRACE_PID)
-    {
+#elif defined(TRACE_PID)
+    if (pid_tgid >> 32 != TRACE_PID) {
         return 0;
     }
-    #endif
+#endif
 
     /* Don't trace self */
-    if (pid_tgid >> 32 == BPFBENCH_PID)
-    {
+    if (pid_tgid >> 32 == BPFBENCH_PID) {
         return 0;
     }
 
     int zero = 0;
     struct intermediate_t *start = intermediate.lookup(&zero);
-    if (!start)
-    {
+    if (!start) {
         return 0;
     }
 
@@ -85,40 +78,34 @@ static inline int do_sysenter(long syscall)
     return 0;
 }
 
-static inline int do_sysexit(long syscall, long ret)
-{
+static inline int do_sysexit(long syscall, long ret) {
     /* Discard restarted syscalls due to system suspend */
-    if (syscall == __NR_restart_syscall)
-    {
+    if (syscall == __NR_restart_syscall) {
         return 0;
     }
 
     /* Ignore system calls that would restart */
-    if (ret == -ERESTARTSYS || ret == -ERESTARTNOHAND
-            || ret == -ERESTARTNOINTR || ret == -ERESTART_RESTARTBLOCK)
-    {
+    if (ret == -ERESTARTSYS || ret == -ERESTARTNOHAND ||
+        ret == -ERESTARTNOINTR || ret == -ERESTART_RESTARTBLOCK) {
         return 0;
     }
 
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
-    /* Maybe filter by PID */
-    #if defined(TRACE_PID) && defined(FOLLOW)
+/* Maybe filter by PID */
+#if defined(TRACE_PID) && defined(FOLLOW)
     u32 pid = (pid_tgid >> 32);
-    if (pid != TRACE_PID && !children.lookup(&pid))
-    {
+    if (pid != TRACE_PID && !children.lookup(&pid)) {
         return 0;
     }
-    #elif defined(TRACE_PID)
-    if (pid_tgid >> 32 != TRACE_PID)
-    {
+#elif defined(TRACE_PID)
+    if (pid_tgid >> 32 != TRACE_PID) {
         return 0;
     }
-    #endif
+#endif
 
     /* Don't trace self */
-    if (pid_tgid >> 32 == BPFBENCH_PID)
-    {
+    if (pid_tgid >> 32 == BPFBENCH_PID) {
         return 0;
     }
 
@@ -126,18 +113,15 @@ static inline int do_sysexit(long syscall, long ret)
 
     struct data_t *data = syscalls.lookup((int *)&syscall);
     struct intermediate_t *start = intermediate.lookup(&zero);
-    if (start && data)
-    {
+    if (start && data) {
         /* We don't want to count twice for calls that return in two places */
-        if (pid_tgid != start->pid_tgid)
-        {
+        if (pid_tgid != start->pid_tgid) {
             return 0;
         }
         data->count++;
         data->overhead += bpf_ktime_get_ns() - start->start_time;
     }
-    if (start)
-    {
+    if (start) {
         start->pid_tgid = 0;
         start->start_time = 0;
     }
@@ -148,16 +132,14 @@ static inline int do_sysexit(long syscall, long ret)
 /* bpf programs below this line --------------------------------------------- */
 
 #ifdef FOLLOW
-RAW_TRACEPOINT_PROBE(sched_process_fork)
-{
+RAW_TRACEPOINT_PROBE(sched_process_fork) {
     struct task_struct *p = (struct task_struct *)ctx->args[0];
     struct task_struct *c = (struct task_struct *)ctx->args[1];
 
     u32 ppid = p->tgid;
 
     /* Filter ppid */
-    if (ppid != TRACE_PID && !children.lookup(&ppid))
-    {
+    if (ppid != TRACE_PID && !children.lookup(&ppid)) {
         return 0;
     }
 
@@ -170,13 +152,11 @@ RAW_TRACEPOINT_PROBE(sched_process_fork)
     return 0;
 }
 
-RAW_TRACEPOINT_PROBE(sched_process_exit)
-{
+RAW_TRACEPOINT_PROBE(sched_process_exit) {
     u32 pid = (bpf_get_current_pid_tgid() >> 32);
 
     /* Filter ppid */
-    if (pid != TRACE_PID && !children.lookup(&pid))
-    {
+    if (pid != TRACE_PID && !children.lookup(&pid)) {
         return 0;
     }
 
@@ -186,12 +166,10 @@ RAW_TRACEPOINT_PROBE(sched_process_exit)
 }
 #endif
 
-TRACEPOINT_PROBE(raw_syscalls, sys_enter)
-{
-    return do_sysenter(args->id);
-}
+KFUNC_PROBE()
 
-TRACEPOINT_PROBE(raw_syscalls, sys_exit)
-{
+TRACEPOINT_PROBE(raw_syscalls, sys_enter) { return do_sysenter(args->id); }
+
+TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
     return do_sysexit(args->id, args->ret);
 }

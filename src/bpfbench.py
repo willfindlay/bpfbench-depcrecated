@@ -34,10 +34,12 @@ from src.utils import syscall_name, drop_privileges, which
 signal.signal(signal.SIGINT, lambda x, y: sys.exit())
 signal.signal(signal.SIGTERM, lambda x, y: sys.exit())
 
+
 class BPFBench:
     """
     Uses a BPF program to benchmark system state.
     """
+
     def __init__(self, args):
         self.args = args
         self.bpf = None
@@ -45,11 +47,15 @@ class BPFBench:
         self.last_checkpoint = None
         # Maybe get duration
         try:
-            self.duration   = functools.reduce(lambda a,b: a + b, self.args.duration)
+            self.duration = functools.reduce(
+                lambda a, b: a + b, self.args.duration
+            )
         except TypeError:
             self.duration = None
         # Get checkpoint
-        self.checkpoint = functools.reduce(lambda a,b: a + b, self.args.checkpoint)
+        self.checkpoint = functools.reduce(
+            lambda a, b: a + b, self.args.checkpoint
+        )
         # Set should_exit to 0
         self.should_exit = 0
         # Set trace_pid to 0 for now
@@ -130,7 +136,11 @@ class BPFBench:
                 continue
             # Convert to us from ns
             overhead = overhead / 1e3
-            results[syscall_name(key.value)] = {'sysnum': key.value, 'count': count, 'overhead': overhead}
+            results[syscall_name(key.value)] = {
+                'sysnum': key.value,
+                'count': count,
+                'overhead': overhead,
+            }
             # Get average
             average_overhead = overhead / (count if count else 1)
             results[syscall_name(key.value)]['avg_overhead'] = average_overhead
@@ -156,7 +166,9 @@ class BPFBench:
         results_str += f'{"SYSCALL":<22s} {"COUNT":>8s} {"OVERHEAD(us)":>22s} {"AVG_OVERHEAD(us/call)":>22s}'
         results_str += '\n'
         # Add results
-        for k, v in sorted(results.items(), key=self.sort_func, reverse=self.reverse_sort):
+        for k, v in sorted(
+            results.items(), key=self.sort_func, reverse=self.reverse_sort
+        ):
             if self.args.sysnum:
                 results_str += f'{v["sysnum"]:<3d} '
             results_str += f'{k:<22s} {v["count"]:>8d} {v["overhead"] :>22.3f}{v["avg_overhead"] :>22.3f}'
@@ -182,7 +194,7 @@ class BPFBench:
             print(f'Unable to find {binary}... Exiting...')
             sys.exit(-1)
         # Wake up and do nothing on SIGUSR1
-        signal.signal(signal.SIGUSR1, lambda x,y: None)
+        signal.signal(signal.SIGUSR1, lambda x, y: None)
         # Reap zombies
         signal.signal(signal.SIGCHLD, self.handle_sigchld)
         pid = os.fork()
@@ -200,20 +212,32 @@ class BPFBench:
         self.start_time = datetime.datetime.now()
         self.last_checkpoint = datetime.datetime.now()
 
-        print(f'Duration:   {self.duration if self.duration else "Forever"}', file=sys.stderr)
+        print(
+            f'Duration:   {self.duration if self.duration else "Forever"}',
+            file=sys.stderr,
+        )
         print(f'Checkpoint: {self.checkpoint}', file=sys.stderr)
         print(f'Start time: {self.start_time}', file=sys.stderr)
 
         # Maybe run a program
         if self.args.run:
-            print(f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration if self.duration else "Forever"}...', file=sys.stderr)
+            print(
+                f'Tracing \"{" ".join(self.args.runargs)}\" for {self.duration if self.duration else "Forever"}...',
+                file=sys.stderr,
+            )
             self.trace_pid = self.run_binary(self.args.run, self.args.runargs)
         # Maybe trace a pid
         elif self.args.pid:
-            print(f'Tracing pid {self.args.pid} for {self.duration if self.duration else "Forever"}...', file=sys.stderr)
+            print(
+                f'Tracing pid {self.args.pid} for {self.duration if self.duration else "Forever"}...',
+                file=sys.stderr,
+            )
             self.trace_pid = int(self.args.pid)
         else:
-            print(f'Tracing system for {self.duration if self.duration else "Forever"}...', file=sys.stderr)
+            print(
+                f'Tracing system for {self.duration if self.duration else "Forever"}...',
+                file=sys.stderr,
+            )
 
         # Load BPF program
         self.load_bpf()
@@ -227,6 +251,7 @@ class BPFBench:
             time.sleep(1)
             if self.should_exit:
                 sys.exit()
+
 
 def main():
     """
