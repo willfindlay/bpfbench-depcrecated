@@ -43,7 +43,9 @@ BPF_HASH(children, u32, u8);
 
 /* helpers below this line -------------------------------------------------- */
 
-static inline int do_sysenter(long syscall) {
+static inline int do_sysenter(long syscall)
+{
+    u64 curr_time = bpf_ktime_get_ns();
     u64 pid_tgid = bpf_get_current_pid_tgid();
 
 /* Maybe filter by PID */
@@ -73,12 +75,14 @@ static inline int do_sysenter(long syscall) {
      * we use this for error checking later */
     start->pid_tgid = pid_tgid;
     /* Record start time */
-    start->start_time = bpf_ktime_get_ns();
+    start->start_time = curr_time;
 
     return 0;
 }
 
-static inline int do_sysexit(long syscall, long ret) {
+static inline int do_sysexit(long syscall, long ret)
+{
+    u64 curr_time = bpf_ktime_get_ns();
     /* Discard restarted syscalls due to system suspend */
     if (syscall == __NR_restart_syscall) {
         return 0;
@@ -119,7 +123,7 @@ static inline int do_sysexit(long syscall, long ret) {
             return 0;
         }
         data->count++;
-        data->overhead += bpf_ktime_get_ns() - start->start_time;
+        data->overhead += curr_time - start->start_time;
     }
     if (start) {
         start->pid_tgid = 0;
@@ -132,7 +136,8 @@ static inline int do_sysexit(long syscall, long ret) {
 /* bpf programs below this line --------------------------------------------- */
 
 #ifdef FOLLOW
-RAW_TRACEPOINT_PROBE(sched_process_fork) {
+RAW_TRACEPOINT_PROBE(sched_process_fork)
+{
     struct task_struct *p = (struct task_struct *)ctx->args[0];
     struct task_struct *c = (struct task_struct *)ctx->args[1];
 
@@ -152,7 +157,8 @@ RAW_TRACEPOINT_PROBE(sched_process_fork) {
     return 0;
 }
 
-RAW_TRACEPOINT_PROBE(sched_process_exit) {
+RAW_TRACEPOINT_PROBE(sched_process_exit)
+{
     u32 pid = (bpf_get_current_pid_tgid() >> 32);
 
     /* Filter ppid */
@@ -166,10 +172,15 @@ RAW_TRACEPOINT_PROBE(sched_process_exit) {
 }
 #endif
 
-KFUNC_PROBE()
+RAW_TRACEPOINT_PROBE(sys_enter)
+{
+    return do_sysenter(ctx->args[1]);
+}
 
-TRACEPOINT_PROBE(raw_syscalls, sys_enter) { return do_sysenter(args->id); }
+RAW_TRACEPOINT_PROBE(sys_exit)
+{
+    struct pt_regs *regs = (struct pt_regs *)ctx->args[0];
+    long id = regs->r8;
 
-TRACEPOINT_PROBE(raw_syscalls, sys_exit) {
-    return do_sysexit(args->id, args->ret);
+    return do_sysexit(id, ctx->args[1]);
 }
